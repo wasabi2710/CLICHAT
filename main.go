@@ -1,27 +1,26 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 )
 
 // client ids
-var client_ids []string
+type Client struct {
+	conn net.Conn
+	addr string // use pure addr for now
+}
 
-// remove client id
-func remove_client_id(client_id string) {
-	for i, id := range client_ids {
-		if id == client_id {
-			client_ids = append(client_ids[:i], client_ids[i+1:]...)
-			break
-		}
-	}
+var clients []Client
+
+func main() {
+	server() // starting websocket server
 }
 
 // CLICHAT Server
 func server() {
-
 	// set up listener for port :80
 	// localhost: simulated client-to-client will have to bind to :80
 	listener, err := net.Listen("tcp", ":80")
@@ -39,49 +38,89 @@ func server() {
 		}
 
 		// conn established with conn.RemoteAddr
-		client_ids = append(client_ids, conn.RemoteAddr().String())
-		for _, addr := range client_ids {
-			fmt.Printf("Client %s connected\n", addr)
+		client := Client{
+			conn: conn,
+			addr: conn.RemoteAddr().String(),
+		}
+		clients = append(clients, client)
+		for _, client := range clients {
+			fmt.Printf("Client %s connected\n", client.addr)
 		}
 
-		// handle multi client connection
+		// handle multi clients connection
 		go handleClientConnection(conn)
 	}
-
 }
 
-func main() {
+// remove client id
+func removeClientAddr(clientAddr string) {
+	for i, client := range clients {
+		if client.addr == clientAddr {
+			clients = append(clients[:i], clients[i+1:]...)
+			break
+		}
+	}
+}
 
-	server() // staring websocket server
+// handle clients chosen comm
+func commSwitch(conn net.Conn) {
+	var availClients []string
+	for _, client := range clients {
+		availClients = append(availClients, client.addr)
+	}
 
+	// serialize availclients
+	clientsAddrJSON, err := json.Marshal(availClients)
+	if err != nil {
+		log.Fatal("Error marshalling data: ", err)
+		return
+	}
+
+	// write json data to connected client
+	_, err = conn.Write(clientsAddrJSON)
+	if err != nil {
+		log.Fatal("Error writing to client: ", err)
+		return
+	}
+}
+
+// comm broadcasting
+func broadcast(msg string) {
+	message := []byte(msg)
+	for _, client := range clients {
+		_, err := client.conn.Write(message)
+		if err != nil {
+			log.Print("Error writing data: ", err)
+		}
+	}
 }
 
 // handle client connections
 func handleClientConnection(conn net.Conn) {
 	defer conn.Close() // close client connection if err occurs
 
-	// each client shall recieve a welcoming message
-	welcomeMessage := []byte("WELCOME TO CLICHAT!")
+	// each client shall receive a welcoming message
+	welcomeMessage := []byte("WELCOME TO CLICHAT!\n")
 	_, err := conn.Write(welcomeMessage)
 	if err != nil {
 		log.Println("Error sending welcome message:", err)
 		return
 	}
 
+	// send connected clients to each client for them to query the comm protocol
+	commSwitch(conn)
+
 	// handle client comm protocol
 	// client message transfer
 	for {
-		byte := make([]byte, 24) // increase buffer size for larger msg
-		_, err := conn.Read(byte)
+		buffer := make([]byte, 1024) // increase buffer size for larger msg
+		n, err := conn.Read(buffer)
 		if err != nil {
 			// client disconnection
 			if err.Error() == "EOF" {
-				log.Printf("%s has diconnected", conn.RemoteAddr())
+				log.Printf("%s has disconnected\n", conn.RemoteAddr())
 				// remove client from ids list
-				remove_client_id(conn.RemoteAddr().String())
-				for _, addr := range client_ids {
-					fmt.Printf("Client %s connected\n", addr)
-				}
+				removeClientAddr(conn.RemoteAddr().String())
 				return
 			}
 			log.Print("CLICHAT Server Error: ", err)
@@ -89,7 +128,8 @@ func handleClientConnection(conn net.Conn) {
 		}
 
 		// client message
-		log.Printf("message from %s : %s", conn.RemoteAddr(), string(byte))
-
+		log.Printf("message from %s: %s\n", conn.RemoteAddr(), string(buffer[:n]))
+		// broadcast this message
+		broadcast(string(buffer[:n]))
 	}
 }

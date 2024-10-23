@@ -8,45 +8,61 @@ import (
 	"os"
 )
 
-func handle_incoming_messsage(conn net.Conn) {
+// connection to clichat
+var conn net.Conn
+
+// handler: server incoming connection
+func handleIncomingMessage(conn net.Conn) {
 	defer conn.Close()
 
+	// read the server message
 	for {
-		byte := make([]byte, 24)
-		_, err := conn.Read(byte)
+		byte := make([]byte, 2048)
+		n, err := conn.Read(byte)
 		if err != nil {
-			log.Fatal("Error reading incoming data: ", err)
+			log.Println("Error reading incoming data: ", err)
+			return
 		}
+		log.Printf("%s\n", string(byte[:n]))
+	}
+}
 
-		log.Println("Server: ", string(byte))
+// connect to clichat server
+func connectToServer() {
+	log.Print("Starting Connection to CLICHAT")
+	var err error
+	conn, err = net.Dial("tcp", "localhost:80")
+	if err != nil {
+		log.Fatalf("Error connecting to CLICHAT server: %v", err)
+	}
 
+	byteConn := []byte("client 1 connected")
+	_, err = conn.Write(byteConn)
+	if err != nil {
+		log.Fatalf("Error sending initial message: %v", err)
+	}
+
+	go handleIncomingMessage(conn)
+}
+
+// handle message relay
+// relaying will use stdin for now
+func messageRelay() {
+	log.Print("Start Messaging")
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		fmt.Print("Message: ")
+		message := scanner.Text()
+		_, err := conn.Write([]byte(message))
+		if err != nil {
+			log.Println("Error sending message: ", err)
+			return
+		}
+		fmt.Print("\n")
 	}
 }
 
 func main() {
-
-	conn, err := net.Dial("tcp", "localhost:80")
-	if err != nil {
-		log.Fatal("Error connecting to CLICHAT server: ", err)
-	}
-
-	byte_conn := []byte("client 1 connected")
-	_, err = conn.Write(byte_conn)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	go handle_incoming_messsage(conn)
-
-	scanner := bufio.NewScanner(os.Stdin)
-
-	for scanner.Scan() {
-		fmt.Print("Enter message: ")
-		message := scanner.Text()
-		_, err := conn.Write([]byte(message))
-		if err != nil {
-			log.Println("Error sending message:", err)
-			return
-		}
-	}
+	connectToServer() // start clichat connection
+	messageRelay()    // start relaying message
 }
