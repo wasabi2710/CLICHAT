@@ -108,7 +108,7 @@ func handleClientConnection(conn net.Conn) {
 	}
 
 	// send connected clients to each client for them to query the comm protocol
-	commSwitch(conn)
+	//commSwitch(conn)
 
 	// handle client comm protocol
 	// client message transfer

@@ -1,56 +1,44 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"strconv"
+
+	"github.com/rivo/tview"
 )
 
-type Item struct {
-	index int
-	name  string
+type Client struct {
+	name string
 }
+
+var selected string
 
 func main() {
-	fmt.Println("Please Choose: ")
 
-	var items []Item
-	items = append(items, Item{
-		index: 1,
-		name:  "apple",
-	})
-	items = append(items, Item{
-		index: 2,
-		name:  "banana",
-	})
-	items = append(items, Item{
-		index: 3,
-		name:  "cherry",
-	})
+	app := tview.NewApplication()
 
-	for _, item := range items {
-		fmt.Printf("{%d} : %s\n", item.index, item.name)
+	clients := []Client{
+		{name: "client 1"},
+		{name: "client 2"},
+		{name: "client 3"},
 	}
 
-	var chose string
-	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Print("Enter item index: ")
-	if scanner.Scan() {
-		chose = scanner.Text()
+	clientNames := make([]string, len(clients))
+	for i, client := range clients {
+		clientNames[i] = client.name
 	}
 
-	// Convert the chosen index to an integer
-	chosenIndex, err := strconv.Atoi(chose)
-	if err != nil {
-		fmt.Println("Invalid input. Please enter a number.")
-		return
-	}
+	form := tview.NewForm().
+		AddDropDown("Clients", clientNames, 0, choose).
+		AddButton("Call", func() {
+			fmt.Println("you chose ", selected)
+		})
 
-	for _, item := range items {
-		if chosenIndex == item.index {
-			fmt.Printf("You chose %s\n", item.name)
-			break
-		}
+	if err := app.SetRoot(form, true).Run(); err != nil {
+		panic(err)
 	}
 }
+
+func choose(option string, optionIndex int) {
+	selected = option
+}
+
