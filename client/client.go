@@ -21,8 +21,9 @@ const (
 
 // Message represents a message with a type and payload
 type Message struct {
-	Type    MessageType `json:"type"`
-	Payload interface{} `json:"payload"`
+	Type      MessageType `json:"type"`
+	Payload   interface{} `json:"payload"`
+	Timestamp string      `json:"timestamp"`
 }
 
 // connection to clichat
@@ -57,9 +58,9 @@ func handleIncomingMessage(conn net.Conn, message *tview.TextView, clientList *t
 		prevMessage := message.GetText(true)
 		switch msg.Type {
 		case WelcomeMessage:
-			message.SetText(prevMessage + ">> " + msg.Payload.(string) + "\n")
+			message.SetText(prevMessage + "### " + msg.Payload.(string) + "\n")
 		case ChatMessage:
-			message.SetText(prevMessage + ">> " + msg.Payload.(string) + "\n")
+			message.SetText(prevMessage + msg.Timestamp + " >> " + msg.Payload.(string) + "\n")
 		case ClientListMessage:
 			clientList.Clear()
 			clientAddrs := msg.Payload.([]interface{})
@@ -116,7 +117,11 @@ func main() {
 	app := tview.NewApplication()
 
 	rightView := tview.NewFlex().SetDirection(tview.FlexRow)
-	rightView.SetBorder(true).SetTitle("CLICHAT").SetTitleAlign(tview.AlignLeft)
+
+	// two more boxes for right view
+	welcomeView := tview.NewFlex().SetDirection(tview.FlexRow)
+	welcomeView.SetBorder(true).SetTitle("CLICHAT").SetTitleAlign(tview.AlignLeft)
+
 	leftView := tview.NewTextView()
 	leftView.SetBorder(true).SetTitle("Message").SetTitleAlign(tview.AlignLeft)
 
@@ -144,11 +149,13 @@ func main() {
 	welcomeBox := tview.NewTextView()
 	connectToServer(welcomeBox, leftView, clientList)
 
-	rightView.AddItem(welcomeBox, 0, 1, false).
-		AddItem(messageBox, 0, 8, true)
+	welcomeView.AddItem(welcomeBox, 0, 1, false).
+		AddItem(messageBox, 0, 6, true)
+
+	rightView.AddItem(welcomeView, 0, 1, true).
+		AddItem(clientList, 0, 1, true)
 
 	root.AddItem(leftView, 0, 1, false).
-		AddItem(clientList, 0, 1, false).
 		AddItem(rightView, 0, 2, true)
 
 	if err := app.SetRoot(root, true).Run(); err != nil {

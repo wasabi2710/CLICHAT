@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"time"
 )
 
 // create custom types of messages
@@ -17,10 +18,11 @@ const (
 	ChatMessage
 )
 
-// Message represents a message with a type and payload
+// Message represents a message with a type, payload, and timestamp
 type Message struct {
-	Type    MessageType `json:"type"`
-	Payload interface{} `json:"payload"` // use interface to store differen kind of data types
+	Type      MessageType `json:"type"`
+	Payload   interface{} `json:"payload"` // use interface to store different kinds of data types
+	Timestamp string      `json:"timestamp"`
 }
 
 // Client represents a connected client
@@ -108,8 +110,9 @@ func sendClientList() {
 	}
 
 	clientListMessage := Message{
-		Type:    ClientListMessage,
-		Payload: clientAddrs,
+		Type:      ClientListMessage,
+		Payload:   clientAddrs,
+		Timestamp: time.Now().Format("02-01-2006 15:04:05"),
 	}
 
 	broadcast(clientListMessage)
@@ -120,8 +123,9 @@ func handleClientConnection(conn net.Conn) {
 	defer conn.Close()
 
 	welcomeMessage := Message{
-		Type:    WelcomeMessage,
-		Payload: "WELCOME TO CLICHAT!",
+		Type:      WelcomeMessage,
+		Payload:   "WELCOME TO CLICHAT!",
+		Timestamp: time.Now().Format("02-01-2006 15:04:05"),
 	}
 	err := sendMessage(conn, welcomeMessage)
 	if err != nil {
@@ -158,6 +162,7 @@ func handleClientConnection(conn net.Conn) {
 		switch msg.Type {
 		case ChatMessage:
 			log.Printf("message from %s: %s\n", conn.RemoteAddr(), msg.Payload)
+			msg.Timestamp = time.Now().Format("02-01-2006 15:04:05")
 			broadcast(msg)
 		case ClientListMessage:
 			// Handle client list message if needed
