@@ -1,43 +1,55 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 )
 
-// client ids
+// create custom types of messages
+type MessageType int
+
+const (
+	WelcomeMessage MessageType = iota
+	ClientListMessage
+	ChatMessage
+)
+
+// Message represents a message with a type and payload
+type Message struct {
+	Type    MessageType `json:"type"`
+	Payload interface{} `json:"payload"` // use interface to store differen kind of data types
+}
+
+// Client represents a connected client
 type Client struct {
 	conn net.Conn
-	addr string // use pure addr for now
+	addr string
 }
 
 var clients []Client
 
 func main() {
-	server() // starting websocket server
+	server()
 }
 
-// CLICHAT Server
+// server starts the CLICHAT server
 func server() {
-	// set up listener for port :80
-	// localhost: simulated client-to-client will have to bind to :80
 	listener, err := net.Listen("tcp", ":80")
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Print("CLICHAT Starting")
 
-	// handle incoming client connections
-	// store each connection as ids in a slice
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Print("Error accepting client connections: ", err)
+			continue
 		}
 
-		// conn established with conn.RemoteAddr
 		client := Client{
 			conn: conn,
 			addr: conn.RemoteAddr().String(),
@@ -47,12 +59,11 @@ func server() {
 			fmt.Printf("Client %s connected\n", client.addr)
 		}
 
-		// handle multi clients connection
 		go handleClientConnection(conn)
 	}
 }
 
-// remove client id
+// removeClientAddr removes a client from the list by address
 func removeClientAddr(clientAddr string) {
 	for i, client := range clients {
 		if client.addr == clientAddr {
@@ -62,74 +73,94 @@ func removeClientAddr(clientAddr string) {
 	}
 }
 
-// handle clients chosen comm
-func commSwitch(conn net.Conn) {
-	var availClients []string
-	for _, client := range clients {
-		availClients = append(availClients, client.addr)
+// sendMessage sends a message to a client
+func sendMessage(conn net.Conn, msg Message) error {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return err
 	}
 
-	// serialize availclients
-	clientsAddrJSON, err := json.Marshal(availClients)
+	length := int32(len(data))
+	err = binary.Write(conn, binary.BigEndian, length)
 	if err != nil {
-		log.Fatal("Error marshalling data: ", err)
-		return
+		return err
 	}
 
-	// write json data to connected client
-	_, err = conn.Write(clientsAddrJSON)
-	if err != nil {
-		log.Fatal("Error writing to client: ", err)
-		return
-	}
+	_, err = conn.Write(data)
+	return err
 }
 
-// comm broadcasting
-func broadcast(msg string) {
-	message := []byte(msg)
+// broadcast sends a message to all clients
+func broadcast(msg Message) {
 	for _, client := range clients {
-		_, err := client.conn.Write(message)
+		err := sendMessage(client.conn, msg)
 		if err != nil {
 			log.Print("Error writing data: ", err)
 		}
 	}
 }
 
-// handle client connections
-func handleClientConnection(conn net.Conn) {
-	defer conn.Close() // close client connection if err occurs
+// sendClientList sends the list of available clients to each client
+func sendClientList() {
+	var clientAddrs []string
+	for _, client := range clients {
+		clientAddrs = append(clientAddrs, client.addr)
+	}
 
-	// each client shall receive a welcoming message
-	welcomeMessage := []byte("WELCOME TO CLICHAT!\n")
-	_, err := conn.Write(welcomeMessage)
+	clientListMessage := Message{
+		Type:    ClientListMessage,
+		Payload: clientAddrs,
+	}
+
+	broadcast(clientListMessage)
+}
+
+// handleClientConnection handles communication with a client
+func handleClientConnection(conn net.Conn) {
+	defer conn.Close()
+
+	welcomeMessage := Message{
+		Type:    WelcomeMessage,
+		Payload: "WELCOME TO CLICHAT!",
+	}
+	err := sendMessage(conn, welcomeMessage)
 	if err != nil {
 		log.Println("Error sending welcome message:", err)
 		return
 	}
 
-	// send connected clients to each client for them to query the comm protocol
-	//commSwitch(conn)
+	sendClientList()
 
-	// handle client comm protocol
-	// client message transfer
 	for {
-		buffer := make([]byte, 1024) // increase buffer size for larger msg
-		n, err := conn.Read(buffer)
+		var length int32
+		err := binary.Read(conn, binary.BigEndian, &length)
 		if err != nil {
-			// client disconnection
-			if err.Error() == "EOF" {
-				log.Printf("%s has disconnected\n", conn.RemoteAddr())
-				// remove client from ids list
-				removeClientAddr(conn.RemoteAddr().String())
-				return
-			}
+			log.Printf("%s has disconnected\n", conn.RemoteAddr())
+			removeClientAddr(conn.RemoteAddr().String())
+			sendClientList()
+			return
+		}
+
+		buffer := make([]byte, length)
+		_, err = conn.Read(buffer)
+		if err != nil {
 			log.Print("CLICHAT Server Error: ", err)
 			return
 		}
 
-		// client message
-		log.Printf("message from %s: %s\n", conn.RemoteAddr(), string(buffer[:n]))
-		// broadcast this message
-		broadcast(string(buffer[:n]))
+		var msg Message
+		err = json.Unmarshal(buffer, &msg)
+		if err != nil {
+			log.Print("Error unmarshalling message: ", err)
+			continue
+		}
+
+		switch msg.Type {
+		case ChatMessage:
+			log.Printf("message from %s: %s\n", conn.RemoteAddr(), msg.Payload)
+			broadcast(msg)
+		case ClientListMessage:
+			// Handle client list message if needed
+		}
 	}
 }

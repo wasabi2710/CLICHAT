@@ -1,36 +1,79 @@
 package main
 
 import (
-	"github.com/gdamore/tcell/v2"
-	"github.com/rivo/tview"
+	"encoding/binary"
+	"encoding/json"
 	"log"
 	"net"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
+
+// MessageType represents the type of message being sent
+type MessageType int
+
+const (
+	WelcomeMessage MessageType = iota
+	ClientListMessage
+	ChatMessage
+)
+
+// Message represents a message with a type and payload
+type Message struct {
+	Type    MessageType `json:"type"`
+	Payload interface{} `json:"payload"`
+}
 
 // connection to clichat
 var conn net.Conn
 
 // handler: server incoming connection
-func handleIncomingMessage(conn net.Conn, message *tview.TextView) {
+func handleIncomingMessage(conn net.Conn, message *tview.TextView, clientList *tview.List) {
 	defer conn.Close()
 
-	// read the server message
 	for {
-		byte := make([]byte, 2048)
-		_, err := conn.Read(byte)
+		var length int32
+		err := binary.Read(conn, binary.BigEndian, &length)
+		if err != nil {
+			log.Println("Error reading message length: ", err)
+			return
+		}
+
+		buffer := make([]byte, length)
+		_, err = conn.Read(buffer)
 		if err != nil {
 			log.Println("Error reading incoming data: ", err)
 			return
 		}
-		prev_message := message.GetText(true)
-		message.SetText(prev_message + ">> " + string(byte) + "\n")
+
+		var msg Message
+		err = json.Unmarshal(buffer, &msg)
+		if err != nil {
+			log.Println("Error unmarshalling message: ", err)
+			continue
+		}
+
+		prevMessage := message.GetText(true)
+		switch msg.Type {
+		case WelcomeMessage:
+			message.SetText(prevMessage + ">> " + msg.Payload.(string) + "\n")
+		case ChatMessage:
+			message.SetText(prevMessage + ">> " + msg.Payload.(string) + "\n")
+		case ClientListMessage:
+			clientList.Clear()
+			clientAddrs := msg.Payload.([]interface{})
+			for _, addr := range clientAddrs {
+				clientList.AddItem(addr.(string), "", 0, nil)
+			}
+		}
 	}
 }
 
 // connect to clichat server
-func connectToServer(welcomeBox *tview.TextView, message *tview.TextView) {
-	prev_msg := welcomeBox.GetText(true)
-	welcomeBox.SetText(prev_msg + ">> Starting Connection to CLICHAT\n")
+func connectToServer(welcomeBox *tview.TextView, message *tview.TextView, clientList *tview.List) {
+	prevMsg := welcomeBox.GetText(true)
+	welcomeBox.SetText(prevMsg + ">> Starting Connection to CLICHAT\n")
 
 	var err error
 	conn, err = net.Dial("tcp", "localhost:80")
@@ -38,38 +81,51 @@ func connectToServer(welcomeBox *tview.TextView, message *tview.TextView) {
 		log.Fatalf("Error connecting to CLICHAT server: %v", err)
 	}
 
-	prev_msg = welcomeBox.GetText(true)
-	welcomeBox.SetText(prev_msg + ">> Connected to CLICHAT server\n")
+	prevMsg = welcomeBox.GetText(true)
+	welcomeBox.SetText(prevMsg + ">> Connected to CLICHAT server\n")
 
-	go handleIncomingMessage(conn, message)
+	go handleIncomingMessage(conn, message, clientList)
 }
 
-// handle message rela
+// handle message relay
 func messageRelay(conn net.Conn, msg string) {
-	data := []byte(msg)
-	_, err := conn.Write(data)
+	message := Message{
+		Type:    ChatMessage,
+		Payload: msg,
+	}
+	data, err := json.Marshal(message)
 	if err != nil {
-		log.Print("Error sending data to server", err)
+		log.Print("Error marshalling message: ", err)
+		return
+	}
+
+	length := int32(len(data))
+	err = binary.Write(conn, binary.BigEndian, length)
+	if err != nil {
+		log.Print("Error writing message length: ", err)
+		return
+	}
+
+	_, err = conn.Write(data)
+	if err != nil {
+		log.Print("Error sending data to server: ", err)
 	}
 }
 
 func main() {
-
-	// init application
 	app := tview.NewApplication()
 
-	// application scaffolds
-	// message view and input view
-	right_view := tview.NewFlex().SetDirection(tview.FlexRow)
-	right_view.SetBorder(true).SetTitle("CLICHAT").SetTitleAlign(tview.AlignLeft)
-	left_view := tview.NewTextView()
-	left_view.SetBorder(true).SetTitle("Message").SetTitleAlign(tview.AlignLeft)
+	rightView := tview.NewFlex().SetDirection(tview.FlexRow)
+	rightView.SetBorder(true).SetTitle("CLICHAT").SetTitleAlign(tview.AlignLeft)
+	leftView := tview.NewTextView()
+	leftView.SetBorder(true).SetTitle("Message").SetTitleAlign(tview.AlignLeft)
 
-	// main scaffold
+	clientList := tview.NewList()
+	clientList.SetBorder(true).SetTitle("Clients").SetTitleAlign(tview.AlignLeft)
+
 	root := tview.NewFlex().SetDirection(tview.FlexColumn)
 
-	// set up message box
-	message_box := tview.NewInputField().
+	messageBox := tview.NewInputField().
 		SetLabel("Input Message:  ").
 		SetFieldWidth(30).
 		SetPlaceholder(" Enter message here...").
@@ -77,27 +133,25 @@ func main() {
 		SetLabelColor(tcell.ColorDarkCyan).
 		SetFieldBackgroundColor(tcell.ColorBlack).
 		SetPlaceholderTextColor(tcell.ColorYellow)
-	message_box.SetDoneFunc(func(key tcell.Key) {
+	messageBox.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
-			msg := message_box.GetText()
+			msg := messageBox.GetText()
 			messageRelay(conn, msg)
-			message_box.SetText("")
+			messageBox.SetText("")
 		}
 	})
 
-	welcome_box := tview.NewTextView()
-	connectToServer(welcome_box, left_view)
+	welcomeBox := tview.NewTextView()
+	connectToServer(welcomeBox, leftView, clientList)
 
-	// set up items designated view
-	right_view.AddItem(welcome_box, 0, 1, false).
-		AddItem(message_box, 0, 8, true)
+	rightView.AddItem(welcomeBox, 0, 1, false).
+		AddItem(messageBox, 0, 8, true)
 
-	// add items to root
-	root.AddItem(left_view, 0, 1, false).AddItem(right_view, 0, 2, true)
+	root.AddItem(leftView, 0, 1, false).
+		AddItem(clientList, 0, 1, false).
+		AddItem(rightView, 0, 2, true)
 
-	// start application
 	if err := app.SetRoot(root, true).Run(); err != nil {
 		log.Fatal("Error starting application: ", err)
 	}
-
 }
