@@ -1,10 +1,18 @@
 package main
 
-import (
-	"fmt"
-	"time"
-)
+import "github.com/rivo/tview"
 
 func main() {
-	fmt.Println(time.Now().Format("02-01-2006 15:04:05"))
+
+	app := tview.NewApplication()
+	drop := tview.NewForm().AddDropDown("", []string{"client 1", "client 2", "client 3"}, 1, selected)
+
+	if err := app.SetRoot(drop, true).Run(); err != nil {
+		panic(err)
+	}
+
+}
+
+func selected(option string, optionIndex int) {
+
 }

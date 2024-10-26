@@ -30,7 +30,7 @@ type Message struct {
 var conn net.Conn
 
 // handler: server incoming connection
-func handleIncomingMessage(conn net.Conn, message *tview.TextView, clientList *tview.List) {
+func handleIncomingMessage(conn net.Conn, message *tview.TextView, clientList *tview.Form) {
 	defer conn.Close()
 
 	for {
@@ -62,19 +62,19 @@ func handleIncomingMessage(conn net.Conn, message *tview.TextView, clientList *t
 		case ChatMessage:
 			message.SetText(prevMessage + msg.Timestamp + " >> " + msg.Payload.(string) + "\n")
 		case ClientListMessage:
-			clientList.Clear()
-			clientAddrs := msg.Payload.([]interface{})
-			for _, addr := range clientAddrs {
-				clientList.AddItem(addr.(string), "", 0, nil)
-			}
+			//var _clients []string
+			//clientAddrs := msg.Payload.([]interface{})
+			//for _, addr := range clientAddrs {
+			//	_clients = append(_clients, addr.(string))
+			//}
 		}
 	}
 }
 
 // connect to clichat server
-func connectToServer(welcomeBox *tview.TextView, message *tview.TextView, clientList *tview.List) {
+func connectToServer(welcomeBox *tview.TextView, message *tview.TextView, clientList *tview.Form) {
 	prevMsg := welcomeBox.GetText(true)
-	welcomeBox.SetText(prevMsg + ">> Starting Connection to CLICHAT\n")
+	welcomeBox.SetText(prevMsg + "### Starting Connection to CLICHAT\n")
 
 	var err error
 	conn, err = net.Dial("tcp", "localhost:80")
@@ -83,7 +83,7 @@ func connectToServer(welcomeBox *tview.TextView, message *tview.TextView, client
 	}
 
 	prevMsg = welcomeBox.GetText(true)
-	welcomeBox.SetText(prevMsg + ">> Connected to CLICHAT server\n")
+	welcomeBox.SetText(prevMsg + "### Connected to CLICHAT server\n")
 
 	go handleIncomingMessage(conn, message, clientList)
 }
@@ -94,6 +94,7 @@ func messageRelay(conn net.Conn, msg string) {
 		Type:    ChatMessage,
 		Payload: msg,
 	}
+
 	data, err := json.Marshal(message)
 	if err != nil {
 		log.Print("Error marshalling message: ", err)
@@ -125,7 +126,7 @@ func main() {
 	leftView := tview.NewTextView()
 	leftView.SetBorder(true).SetTitle("Message").SetTitleAlign(tview.AlignLeft)
 
-	clientList := tview.NewList()
+	clientList := tview.NewForm()
 	clientList.SetBorder(true).SetTitle("Clients").SetTitleAlign(tview.AlignLeft)
 
 	root := tview.NewFlex().SetDirection(tview.FlexColumn)
@@ -150,9 +151,9 @@ func main() {
 	connectToServer(welcomeBox, leftView, clientList)
 
 	welcomeView.AddItem(welcomeBox, 0, 1, false).
-		AddItem(messageBox, 0, 6, true)
+		AddItem(messageBox, 0, 6, false)
 
-	rightView.AddItem(welcomeView, 0, 1, true).
+	rightView.AddItem(welcomeView, 0, 1, false).
 		AddItem(clientList, 0, 1, true)
 
 	root.AddItem(leftView, 0, 1, false).
