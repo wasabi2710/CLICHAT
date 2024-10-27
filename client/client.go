@@ -26,6 +26,12 @@ type Message struct {
 	Timestamp string      `json:"timestamp"`
 }
 
+// change tab focus
+type Focus struct {
+	view     map[int]*tview.Box
+	selected int
+}
+
 // connection to clichat
 var conn net.Conn
 
@@ -126,6 +132,7 @@ func main() {
 	clientList.SetBorder(true).SetTitle("Clients").SetTitleAlign(tview.AlignLeft)
 	root := tview.NewFlex().SetDirection(tview.FlexColumn)
 	messageBox := tview.NewInputField().SetLabel("Input Message:  ").SetFieldWidth(30).SetPlaceholder(" Enter message here...").SetFieldTextColor(tcell.ColorWhite).SetLabelColor(tcell.ColorDarkCyan).SetFieldBackgroundColor(tcell.ColorBlack).SetPlaceholderTextColor(tcell.ColorYellow)
+	messageBox.SetBorder(true).SetTitle("Message Input").SetTitleAlign(tview.AlignLeft)
 	messageBox.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
 			msg := messageBox.GetText()
@@ -133,12 +140,35 @@ func main() {
 			messageBox.SetText("")
 		}
 	})
+
+	tab := &Focus{
+		view: map[int]*tview.Box{
+			1: messageBox.Box,
+			2: clientList.Box,
+		},
+		selected: 1,
+	}
+
+	// switch focus here
+	root.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Key() {
+		case tcell.KeyTab:
+			tab.selected++
+			if tab.selected > 2 {
+				tab.selected = 1
+			}
+			app.SetFocus(tab.view[tab.selected])
+		}
+		return event
+	})
+
 	welcomeBox := tview.NewTextView()
 	connectToServer(welcomeBox, leftView, clientList)
-	welcomeView.AddItem(welcomeBox, 0, 1, false).AddItem(messageBox, 0, 6, false)
-	rightView.AddItem(welcomeView, 0, 1, false).AddItem(clientList, 0, 1, true)
+	welcomeView.AddItem(welcomeBox, 0, 1, false)
+	rightView.AddItem(welcomeView, 0, 1, true).AddItem(clientList, 0, 1, false).AddItem(messageBox, 0, 1, true)
 	root.AddItem(leftView, 0, 1, false).AddItem(rightView, 0, 2, true)
 	if err := app.SetRoot(root, true).Run(); err != nil {
 		log.Fatal("Error starting application: ", err)
 	}
 }
+
