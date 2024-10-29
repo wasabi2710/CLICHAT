@@ -16,6 +16,7 @@ const (
 	WelcomeMessage MessageType = iota
 	ClientListMessage
 	ChatMessage
+	SelectedClient
 )
 
 // Message represents a message with a type, payload, and timestamp
@@ -39,7 +40,7 @@ func main() {
 
 // server starts the CLICHAT server
 func server() {
-	listener, err := net.Listen("tcp", ":80")
+	listener, err := net.Listen("tcp", ":9999")
 	if err != nil {
 		log.Fatal(err)
 	}

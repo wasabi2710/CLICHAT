@@ -17,6 +17,7 @@ const (
 	WelcomeMessage MessageType = iota
 	ClientListMessage
 	ChatMessage
+	SelectedClient
 )
 
 // Message represents a message with a type and payload
@@ -38,9 +39,14 @@ var conn net.Conn
 // available clients list
 var _clients []string
 
+// current client
+var curClient string
+
 // handler: clients selection
 func clientSelect(index int, mainText string, secondaryText string, shortcut rune) {
-
+	curClient = mainText
+	// tell the server that i need to relay my messages this client currently
+	selectedClient(conn, curClient)
 }
 
 // handler: server incoming connection
@@ -70,7 +76,7 @@ func handleIncomingMessage(conn net.Conn, message *tview.TextView, clientList *t
 		case WelcomeMessage:
 			message.SetText(prevMessage + "### " + msg.Payload.(string) + "\n")
 		case ChatMessage:
-			message.SetText(prevMessage + msg.Timestamp + " >> " + msg.Payload.(string) + "\n")
+			message.SetText(prevMessage + curClient + msg.Timestamp + " >> " + msg.Payload.(string) + "\n")
 		case ClientListMessage:
 			clientList.Clear()
 			clientAddrs := msg.Payload.([]interface{})
@@ -88,7 +94,7 @@ func connectToServer(welcomeBox *tview.TextView, message *tview.TextView, client
 	prevMsg := welcomeBox.GetText(true)
 	welcomeBox.SetText(prevMsg + "### Starting Connection to CLICHAT\n")
 	var err error
-	conn, err = net.Dial("tcp", "localhost:80")
+	conn, err = net.Dial("tcp", "192.168.1.6:9999")
 	if err != nil {
 		log.Fatalf("Error connecting to CLICHAT server: %v", err)
 	}
@@ -117,6 +123,34 @@ func messageRelay(conn net.Conn, msg string) {
 	_, err = conn.Write(data)
 	if err != nil {
 		log.Print("Error sending data to server: ", err)
+	}
+}
+
+// hanlde client selection relay
+func selectedClient(conn net.Conn, client string) {
+	// define payload
+	thisClient := Message{
+		Type:    SelectedClient,
+		Payload: client,
+	}
+	// serialize payload
+	data, err := json.Marshal(thisClient)
+	if err != nil {
+		log.Print("Error marshalling client: ", err)
+		return
+	}
+	// get length
+	length := int32(len(data))
+	err = binary.Write(conn, binary.BigEndian, length)
+	if err != nil {
+		log.Print("Error writing message length: ", err)
+		return
+	}
+	// write data to server
+	_, err = conn.Write(data)
+	if err != nil {
+		log.Print("Error writing data to server: ", err)
+		return
 	}
 }
 
@@ -166,9 +200,8 @@ func main() {
 	connectToServer(welcomeBox, leftView, clientList)
 	welcomeView.AddItem(welcomeBox, 0, 1, false)
 	rightView.AddItem(welcomeView, 0, 1, true).AddItem(clientList, 0, 1, false).AddItem(messageBox, 0, 1, true)
-	root.AddItem(leftView, 0, 1, false).AddItem(rightView, 0, 2, true)
+	root.AddItem(leftView, 0, 1, false).AddItem(rightView, 0, 1, true)
 	if err := app.SetRoot(root, true).Run(); err != nil {
 		log.Fatal("Error starting application: ", err)
 	}
 }
-
