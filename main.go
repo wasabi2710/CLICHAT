@@ -24,14 +24,8 @@ type Message struct {
 	Type      MessageType `json:"type"`
 	Sender    string      `json:"sender"`
 	Relay     string      `json:"relay"`
-	Payload   interface{} `json:"payload"` // use interface to store different kinds of data types
+	Payload   interface{} `json:"payload"`
 	Timestamp string      `json:"timestamp"`
-}
-
-// c2c relay
-type HalfDuplex struct {
-	Sender   string `json:"sender"`
-	Receiver string `json:"receiver"`
 }
 
 // Client represents a connected client
@@ -111,34 +105,39 @@ func broadcast(msg Message) {
 	}
 }
 
-// p2p: relay message {sender, receiver, payload}
-func messageRelay(conn net.Conn, receiver string, msg string, now string) {
-	// server relays the msg of net.conn
+// messageRelay relays a message from one client to another
+func messageRelay(senderConn net.Conn, receiverAddr string, msg string, now string) {
 	relayPayload := Message{
 		Type:      ChatMessage,
-		Relay:     receiver,
-		Sender:    conn.RemoteAddr().String(),
+		Relay:     receiverAddr,
+		Sender:    senderConn.RemoteAddr().String(),
 		Payload:   msg,
 		Timestamp: now,
 	}
-	// serialize
+
 	data, err := json.Marshal(relayPayload)
 	if err != nil {
 		log.Print("Error marshalling data: ", err)
 		return
 	}
-	// get length
+
 	length := int32(len(data))
-	err = binary.Write(conn, binary.BigEndian, length)
-	if err != nil {
-		log.Print("Error writing data length: ", err)
-		return
-	}
-	// write to receiver
-	_, err = conn.Write(data)
-	if err != nil {
-		log.Print("Error writing data: ", err)
-		return
+
+	for _, client := range clients {
+		if client.addr == receiverAddr {
+			err = binary.Write(client.conn, binary.BigEndian, length)
+			if err != nil {
+				log.Print("Error writing data length: ", err)
+				return
+			}
+
+			_, err = client.conn.Write(data)
+			if err != nil {
+				log.Print("Error writing data: ", err)
+				return
+			}
+			break
+		}
 	}
 }
 
@@ -204,11 +203,9 @@ func handleClientConnection(conn net.Conn) {
 		case ChatMessage:
 			log.Printf("message from %s to %s: %s\n", conn.RemoteAddr(), msg.Relay, msg.Payload)
 			msg.Timestamp = time.Now().Format("02-01-2006 15:04:05")
-			//broadcast(msg)
 			messageRelay(conn, msg.Relay, msg.Payload.(string), msg.Timestamp)
 		case ClientListMessage:
 			// Handle client list message if needed
 		}
 	}
 }
-
