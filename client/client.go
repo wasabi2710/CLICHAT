@@ -23,6 +23,8 @@ const (
 // Message represents a message with a type and payload
 type Message struct {
 	Type      MessageType `json:"type"`
+	Sender    string      `json:"sender"`
+	Relay     string      `json:"relay"`
 	Payload   interface{} `json:"payload"`
 	Timestamp string      `json:"timestamp"`
 }
@@ -46,7 +48,7 @@ var curClient string
 func clientSelect(index int, mainText string, secondaryText string, shortcut rune) {
 	curClient = mainText
 	// tell the server that i need to relay my messages this client currently
-	selectedClient(conn, curClient)
+	//selectedClient(conn, curClient)
 }
 
 // handler: server incoming connection
@@ -76,7 +78,9 @@ func handleIncomingMessage(conn net.Conn, message *tview.TextView, clientList *t
 		case WelcomeMessage:
 			message.SetText(prevMessage + "### " + msg.Payload.(string) + "\n")
 		case ChatMessage:
-			message.SetText(prevMessage + curClient + msg.Timestamp + " >> " + msg.Payload.(string) + "\n")
+			if msg.Relay == msg.Sender {
+				message.SetText(prevMessage + msg.Timestamp + " >> " + msg.Payload.(string) + "\n")
+			}
 		case ClientListMessage:
 			clientList.Clear()
 			clientAddrs := msg.Payload.([]interface{})
@@ -94,7 +98,7 @@ func connectToServer(welcomeBox *tview.TextView, message *tview.TextView, client
 	prevMsg := welcomeBox.GetText(true)
 	welcomeBox.SetText(prevMsg + "### Starting Connection to CLICHAT\n")
 	var err error
-	conn, err = net.Dial("tcp", "192.168.1.5:9999")
+	conn, err = net.Dial("tcp", "192.168.1.2:9999")
 	if err != nil {
 		log.Fatalf("Error connecting to CLICHAT server: %v", err)
 	}
@@ -107,6 +111,7 @@ func connectToServer(welcomeBox *tview.TextView, message *tview.TextView, client
 func messageRelay(conn net.Conn, msg string) {
 	message := Message{
 		Type:    ChatMessage,
+		Relay:   curClient,
 		Payload: msg,
 	}
 	data, err := json.Marshal(message)

@@ -22,8 +22,16 @@ const (
 // Message represents a message with a type, payload, and timestamp
 type Message struct {
 	Type      MessageType `json:"type"`
+	Sender    string      `json:"sender"`
+	Relay     string      `json:"relay"`
 	Payload   interface{} `json:"payload"` // use interface to store different kinds of data types
 	Timestamp string      `json:"timestamp"`
+}
+
+// c2c relay
+type HalfDuplex struct {
+	Sender   string `json:"sender"`
+	Receiver string `json:"receiver"`
 }
 
 // Client represents a connected client
@@ -103,6 +111,35 @@ func broadcast(msg Message) {
 	}
 }
 
+// p2p: relay message {sender, receiver, payload}
+func messageRelay(conn net.Conn, receiver string, msg string) {
+	// server relays the msg of net.conn
+	relayPayload := Message{
+		Type:    ChatMessage,
+		Relay:   receiver,
+		Payload: msg,
+	}
+	// serialize
+	data, err := json.Marshal(relayPayload)
+	if err != nil {
+		log.Print("Error marshalling data: ", err)
+		return
+	}
+	// get length
+	length := int32(len(data))
+	err = binary.Write(conn, binary.BigEndian, length)
+	if err != nil {
+		log.Print("Error writing data length: ", err)
+		return
+	}
+	// write to receiver
+	_, err = conn.Write(data)
+	if err != nil {
+		log.Print("Error writing data: ", err)
+		return
+	}
+}
+
 // sendClientList sends the list of available clients to each client
 func sendClientList() {
 	var clientAddrs []string
@@ -125,6 +162,7 @@ func handleClientConnection(conn net.Conn) {
 
 	welcomeMessage := Message{
 		Type:      WelcomeMessage,
+		Sender:    conn.RemoteAddr().String(),
 		Payload:   "WELCOME TO CLICHAT!",
 		Timestamp: time.Now().Format("02-01-2006 15:04:05"),
 	}
@@ -162,11 +200,13 @@ func handleClientConnection(conn net.Conn) {
 
 		switch msg.Type {
 		case ChatMessage:
-			log.Printf("message from %s: %s\n", conn.RemoteAddr(), msg.Payload)
+			log.Printf("message from %s to %s: %s\n", conn.RemoteAddr(), msg.Relay, msg.Payload)
 			msg.Timestamp = time.Now().Format("02-01-2006 15:04:05")
-			broadcast(msg)
+			//broadcast(msg)
+			messageRelay(conn, msg.Relay, msg.Payload.(string))
 		case ClientListMessage:
 			// Handle client list message if needed
 		}
 	}
 }
+
