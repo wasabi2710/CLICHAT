@@ -135,7 +135,14 @@ func messageRelay(conn net.Conn, receiver string, msg string, now string) {
 		return
 	}
 	// write to receiver
-	_, err = conn.Write(data)
+	var thisReceiver net.Conn
+	for _, client := range clients {
+		if client.conn.RemoteAddr().String() == receiver {
+			thisReceiver = client.conn
+			break
+		}
+	}
+	_, err = thisReceiver.Write(data)
 	if err != nil {
 		log.Print("Error writing data: ", err)
 		return

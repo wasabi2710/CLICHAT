@@ -76,13 +76,9 @@ func handleIncomingMessage(conn net.Conn, message *tview.TextView, clientList *t
 		prevMessage := message.GetText(true)
 		switch msg.Type {
 		case WelcomeMessage:
-			message.SetText(prevMessage + "### " + msg.Payload.(string) + "[" + msg.Sender + "]" + "\n")
+			message.SetText(prevMessage + "### " + msg.Payload.(string) + " [" + msg.Sender + "]" + "\n")
 		case ChatMessage:
-			if msg.Relay == msg.Sender {
-				message.SetText(prevMessage + msg.Timestamp + " >> " + msg.Payload.(string) + "\n")
-			} else {
-				message.SetText(prevMessage + msg.Timestamp + msg.Relay + " not >> " + msg.Payload.(string) + "\n")
-			}
+			message.SetText(prevMessage + msg.Timestamp + " >> " + msg.Payload.(string) + "\n")
 		case ClientListMessage:
 			clientList.Clear()
 			clientAddrs := msg.Payload.([]interface{})
