@@ -94,7 +94,7 @@ func connectToServer(welcomeBox *tview.TextView, message *tview.TextView, client
 	prevMsg := welcomeBox.GetText(true)
 	welcomeBox.SetText(prevMsg + "### Starting Connection to CLICHAT\n")
 	var err error
-	conn, err = net.Dial("tcp", "192.168.1.6:9999")
+	conn, err = net.Dial("tcp", "192.168.1.5:9999")
 	if err != nil {
 		log.Fatalf("Error connecting to CLICHAT server: %v", err)
 	}
