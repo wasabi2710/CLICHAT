@@ -112,12 +112,14 @@ func broadcast(msg Message) {
 }
 
 // p2p: relay message {sender, receiver, payload}
-func messageRelay(conn net.Conn, receiver string, msg string) {
+func messageRelay(conn net.Conn, receiver string, msg string, now string) {
 	// server relays the msg of net.conn
 	relayPayload := Message{
-		Type:    ChatMessage,
-		Relay:   receiver,
-		Payload: msg,
+		Type:      ChatMessage,
+		Relay:     receiver,
+		Sender:    conn.RemoteAddr().String(),
+		Payload:   msg,
+		Timestamp: now,
 	}
 	// serialize
 	data, err := json.Marshal(relayPayload)
@@ -203,7 +205,7 @@ func handleClientConnection(conn net.Conn) {
 			log.Printf("message from %s to %s: %s\n", conn.RemoteAddr(), msg.Relay, msg.Payload)
 			msg.Timestamp = time.Now().Format("02-01-2006 15:04:05")
 			//broadcast(msg)
-			messageRelay(conn, msg.Relay, msg.Payload.(string))
+			messageRelay(conn, msg.Relay, msg.Payload.(string), msg.Timestamp)
 		case ClientListMessage:
 			// Handle client list message if needed
 		}
