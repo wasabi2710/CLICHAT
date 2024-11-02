@@ -124,6 +124,21 @@ func messageRelay(senderConn net.Conn, receiverAddr string, msg string, now stri
 	length := int32(len(data))
 
 	for _, client := range clients {
+		// send for sender client
+		if client.addr == senderConn.RemoteAddr().String() {
+			err = binary.Write(client.conn, binary.BigEndian, length)
+			if err != nil {
+				log.Print("Error writing data length: ", err)
+				return
+			}
+
+			_, err = client.conn.Write(data)
+			if err != nil {
+				log.Print("Error writing data: ", err)
+				return
+			}
+		}
+		// send for receiver client
 		if client.addr == receiverAddr {
 			err = binary.Write(client.conn, binary.BigEndian, length)
 			if err != nil {
@@ -136,7 +151,6 @@ func messageRelay(senderConn net.Conn, receiverAddr string, msg string, now stri
 				log.Print("Error writing data: ", err)
 				return
 			}
-			break
 		}
 	}
 }

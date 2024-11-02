@@ -78,7 +78,11 @@ func handleIncomingMessage(conn net.Conn, message *tview.TextView, clientList *t
 		case WelcomeMessage:
 			message.SetText(prevMessage + "### " + msg.Payload.(string) + " [" + msg.Sender + "]" + "\n")
 		case ChatMessage:
-			message.SetText(prevMessage + msg.Timestamp + " >> " + msg.Payload.(string) + "\n")
+			if msg.Sender == conn.RemoteAddr().String() {
+				message.SetText(prevMessage + msg.Timestamp + " [" + msg.Sender + "]" + " >> " + msg.Payload.(string) + "\n").SetTextColor(tcell.ColorGreen)
+			} else {
+				message.SetText(prevMessage + msg.Timestamp + " [" + msg.Sender + "]" + " >> " + msg.Payload.(string) + "\n").SetTextColor(tcell.ColorCoral)
+			}
 		case ClientListMessage:
 			clientList.Clear()
 			clientAddrs := msg.Payload.([]interface{})
@@ -96,7 +100,7 @@ func connectToServer(welcomeBox *tview.TextView, message *tview.TextView, client
 	prevMsg := welcomeBox.GetText(true)
 	welcomeBox.SetText(prevMsg + "### Starting Connection to CLICHAT\n")
 	var err error
-	conn, err = net.Dial("tcp", "192.168.1.2:9999")
+	conn, err = net.Dial("tcp", "192.168.1.5:9999")
 	if err != nil {
 		log.Fatalf("Error connecting to CLICHAT server: %v", err)
 	}
@@ -106,7 +110,7 @@ func connectToServer(welcomeBox *tview.TextView, message *tview.TextView, client
 }
 
 // handle message relay
-func messageRelay(conn net.Conn, msg string) {
+func messageRelay(conn net.Conn, msg string, msgView *tview.TextView) {
 	message := Message{
 		Type:    ChatMessage,
 		Relay:   curClient,
@@ -173,7 +177,7 @@ func main() {
 	messageBox.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
 			msg := messageBox.GetText()
-			messageRelay(conn, msg)
+			messageRelay(conn, msg, leftView)
 			messageBox.SetText("")
 		}
 	})
