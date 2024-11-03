@@ -2,4 +2,3 @@
 [x] server: create a client-to-client relay message
 [x] refactor views
 [ ] client: differentiate between sent texts and received texts
-[ ] :w
