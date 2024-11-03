@@ -76,11 +76,11 @@ func handleIncomingMessage(conn net.Conn, message *tview.List, clientList *tview
 		}
 		switch msg.Type {
 		case WelcomeMessage:
-			curStr := fmt.Sprintf("-> %s", msg.Payload.(string))
-			message.AddItem(string(curStr), "", '-', nil)
+			curStr := fmt.Sprintf("{ %s }", msg.Payload.(string))
+			message.AddItem(string(curStr), "", '\u0000', nil)
 		case ChatMessage:
 			curStr := fmt.Sprintf("-> %s", msg.Payload.(string))
-			message.AddItem(curStr, msg.Timestamp, '-', nil)
+			message.AddItem(curStr, msg.Timestamp, '\u0000', nil)
 		case ClientListMessage:
 			clientList.Clear()
 			clientAddrs := msg.Payload.([]interface{})
@@ -98,7 +98,7 @@ func connectToServer(welcomeBox *tview.TextView, message *tview.List, clientList
 	prevMsg := welcomeBox.GetText(true)
 	welcomeBox.SetText(prevMsg + "### Starting Connection to CLICHAT\n")
 	var err error
-	conn, err = net.Dial("tcp", "192.168.1.3:9999")
+	conn, err = net.Dial("tcp", "192.168.1.13:9999")
 	if err != nil {
 		log.Fatalf("Error connecting to CLICHAT server: %v", err)
 	}
