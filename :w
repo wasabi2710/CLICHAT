@@ -23,7 +23,6 @@ const (
 type Message struct {
 	Type      MessageType `json:"type"`
 	Sender    string      `json:"sender"`
-	Hostaddr  string      `json:"hostaddr"`
 	Relay     string      `json:"relay"`
 	Payload   interface{} `json:"payload"`
 	Timestamp string      `json:"timestamp"`
@@ -58,20 +57,19 @@ func server() {
 		}
 
 		// look up domain
-		addr := conn.RemoteAddr().(*net.TCPAddr)
-		hostname, err := net.LookupAddr(addr.IP.String())
+		name, err := net.LookupAddr(conn.RemoteAddr().String())
 
 		client := Client{
 			conn:     conn,
 			addr:     conn.RemoteAddr().String(),
-			hostname: hostname[0],
+			hostname: name,
 		}
 		clients = append(clients, client)
 		for _, client := range clients {
 			fmt.Printf("Client %s connected\n", client.addr)
 		}
 
-		go handleClientConnection(conn, hostname[0])
+		go handleClientConnection(conn)
 	}
 }
 
@@ -113,11 +111,10 @@ func broadcast(msg Message) {
 }
 
 // messageRelay relays a message from one client to another
-func messageRelay(senderConn net.Conn, receiverAddr string, msg string, now string, sender string) {
+func messageRelay(senderConn net.Conn, receiverAddr string, msg string, now string) {
 	relayPayload := Message{
 		Type:      ChatMessage,
 		Relay:     receiverAddr,
-		Hostaddr:  sender,
 		Sender:    senderConn.RemoteAddr().String(),
 		Payload:   msg,
 		Timestamp: now,
@@ -153,6 +150,7 @@ func messageRelay(senderConn net.Conn, receiverAddr string, msg string, now stri
 				log.Print("Error writing data length: ", err)
 				return
 			}
+
 			_, err = client.conn.Write(data)
 			if err != nil {
 				log.Print("Error writing data: ", err)
@@ -164,21 +162,22 @@ func messageRelay(senderConn net.Conn, receiverAddr string, msg string, now stri
 
 // sendClientList sends the list of available clients to each client
 func sendClientList() {
-	var clientAddrs []map[string]string
-	// map[client.hostname]client.addr
+	var clientAddrs []string
 	for _, client := range clients {
-		clientAddrs = append(clientAddrs, map[string]string{client.hostname: client.addr})
+		clientAddrs = append(clientAddrs, client.addr)
 	}
+
 	clientListMessage := Message{
 		Type:      ClientListMessage,
 		Payload:   clientAddrs,
 		Timestamp: time.Now().Format("02-01-2006 15:04:05"),
 	}
+
 	broadcast(clientListMessage)
 }
 
 // handleClientConnection handles communication with a client
-func handleClientConnection(conn net.Conn, hostname string) {
+func handleClientConnection(conn net.Conn) {
 	defer conn.Close()
 
 	welcomeMessage := Message{
@@ -223,7 +222,7 @@ func handleClientConnection(conn net.Conn, hostname string) {
 		case ChatMessage:
 			log.Printf("message from %s to %s: %s\n", conn.RemoteAddr(), msg.Relay, msg.Payload)
 			msg.Timestamp = time.Now().Format("02-01-2006 15:04:05")
-			messageRelay(conn, msg.Relay, msg.Payload.(string), msg.Timestamp, hostname)
+			messageRelay(conn, msg.Relay, msg.Payload.(string), msg.Timestamp)
 		case ClientListMessage:
 			// Handle client list message if needed
 		}

@@ -25,6 +25,7 @@ const (
 type Message struct {
 	Type      MessageType `json:"type"`
 	Sender    string      `json:"sender"`
+	Hostaddr  string      `json:"hostaddr"`
 	Relay     string      `json:"relay"`
 	Payload   interface{} `json:"payload"`
 	Timestamp string      `json:"timestamp"`
@@ -38,12 +39,14 @@ type Focus struct {
 
 // connection to clichat
 var conn net.Conn
+var host string
 
 // available clients list
 var _clients []string
 
 // current client
 var curClient string
+var curName string
 
 // handler: clients selection
 func clientSelect(index int, mainText string, secondaryText string, shortcut rune) {
@@ -79,16 +82,30 @@ func handleIncomingMessage(conn net.Conn, message *tview.List, clientList *tview
 			curStr := fmt.Sprintf("{ %s }", msg.Payload.(string))
 			message.AddItem(string(curStr), "", '\u0000', nil)
 		case ChatMessage:
-			curStr := fmt.Sprintf("-> %s", msg.Payload.(string))
-			message.AddItem(curStr, msg.Timestamp, '\u0000', nil)
+			if msg.Sender == conn.LocalAddr().String() {
+				curStr := fmt.Sprintf("(YOU) -> \033[1;34m%s\033[0m", msg.Payload.(string))
+				message.AddItem(curStr, msg.Timestamp, '\u0000', nil)
+			} else {
+				curStr := fmt.Sprintf("(%s) -> %s", msg.Hostaddr, msg.Payload.(string))
+				message.AddItem(curStr, msg.Timestamp, '\u0000', nil)
+			}
 		case ClientListMessage:
-			clientList.Clear()
 			clientAddrs := msg.Payload.([]interface{})
 			for _, addr := range clientAddrs {
-				_clients = append(_clients, addr.(string))
-				clientList.AddItem(addr.(string), "", 0, nil)
+				clientMap := addr.(map[string]interface{})
+				for hostname, address := range clientMap {
+					addrStr, err := address.(string)
+					if !err {
+						log.Print("Error: address is not a string")
+						continue
+					}
+					if addrStr != conn.LocalAddr().String() {
+						_clients = append(_clients, addrStr)
+						clientList.AddItem(addrStr, hostname, '>', nil)
+					}
+				}
 			}
-			clientList.SetSelectedFunc(clientSelect)
+			clientList.SetSelectedFunc(clientSelect).SetSelectedTextColor(tcell.ColorLawnGreen)
 		}
 	}
 }
@@ -98,7 +115,7 @@ func connectToServer(welcomeBox *tview.TextView, message *tview.List, clientList
 	prevMsg := welcomeBox.GetText(true)
 	welcomeBox.SetText(prevMsg + "### Starting Connection to CLICHAT\n")
 	var err error
-	conn, err = net.Dial("tcp", "192.168.1.13:9999")
+	conn, err = net.Dial("tcp", "10.0.2.15:9999")
 	if err != nil {
 		log.Fatalf("Error connecting to CLICHAT server: %v", err)
 	}
